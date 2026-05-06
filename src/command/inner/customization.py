@@ -37,7 +37,8 @@ SUB_OPTIONS_EXHAUSTIVE_VALUES = {
     "display_via": (0, 1, -3, -1, -4, -2),
     "display_title": (0, 1, -1),
     "display_entry_tags": (1, -1),
-    "style": (0, 1)
+    "style": (0, 1),
+    "ai_tags": (0, 1, -1),
 }
 
 FALLBACK_TO_USER_DEFAULT_EMOJI = "↩️"
@@ -76,7 +77,7 @@ async def get_customization_buttons(sub_or_user: Union[db.Sub, db.User],
     is_user = isinstance(sub_or_user, db.User)
     if is_user:
         interval_d = length_limit_d = notify_d = send_mode_d = link_preview_d = display_media_d = display_author_d = \
-            display_via_d = display_title_d = display_entry_tags_d = style_d = False
+            display_via_d = display_title_d = display_entry_tags_d = style_d = ai_tags_d = False
         all_default = None
     else:
         if not isinstance(sub_or_user.user, db.User):
@@ -92,8 +93,9 @@ async def get_customization_buttons(sub_or_user: Union[db.Sub, db.User],
         display_title_d = sub_or_user.display_title == -100
         display_entry_tags_d = sub_or_user.display_entry_tags == -100
         style_d = sub_or_user.style == -100
+        ai_tags_d = sub_or_user.ai_tags == -100
         all_default = all((interval_d, length_limit_d, notify_d, send_mode_d, link_preview_d, display_media_d,
-                           display_author_d, display_via_d, display_title_d, display_entry_tags_d, style_d))
+                           display_author_d, display_via_d, display_title_d, display_entry_tags_d, style_d, ai_tags_d))
     interval = sub_or_user.user.interval if interval_d else sub_or_user.interval
     length_limit = sub_or_user.user.length_limit if length_limit_d else sub_or_user.length_limit
     notify = sub_or_user.user.notify if notify_d else sub_or_user.notify
@@ -105,6 +107,7 @@ async def get_customization_buttons(sub_or_user: Union[db.Sub, db.User],
     display_title = sub_or_user.user.display_title if display_title_d else sub_or_user.display_title
     display_entry_tags = sub_or_user.user.display_entry_tags if display_entry_tags_d else sub_or_user.display_entry_tags
     style = sub_or_user.user.style if style_d else sub_or_user.style
+    ai_tags = sub_or_user.user.ai_tags if ai_tags_d else sub_or_user.ai_tags
     buttons = (
         (
             Button.inline(
@@ -218,6 +221,18 @@ async def get_customization_buttons(sub_or_user: Union[db.Sub, db.User],
         ),
         (
             Button.inline(
+                f"{i18n[lang]['ai_tags']}: "
+                + (FALLBACK_TO_USER_DEFAULT_EMOJI if ai_tags_d else '')
+                + i18n[lang][f'ai_tags_{ai_tags}'],
+                data=(
+                    f'set_default=ai_tags{tail}'
+                    if is_user
+                    else f'set={sub_or_user.id},ai_tags|{page}{tail}'
+                ),
+            ),
+        ),
+        (
+            Button.inline(
                 f"{i18n[lang]['display_via']}: "
                 + (FALLBACK_TO_USER_DEFAULT_EMOJI if display_via_d else '')
                 + i18n[lang][f'display_via_{display_via}'],
@@ -301,7 +316,7 @@ async def get_set_interval_buttons(sub_or_user: Union[db.Sub, int],
     minimal_interval: int = db.EffectiveOptions.minimal_interval
 
     columns = 4
-    buttons_in_minute_and_hour_count = sum(
+    buttons_in_minute_and_hour_count = 1 + sum(  # +1 for hardcoded 1min button
         interval >= minimal_interval for interval in chain(
             range(1, 5),
             range(5, 61, 5),
@@ -318,6 +333,12 @@ async def get_set_interval_buttons(sub_or_user: Union[db.Sub, int],
             +
             arrange_grid(
                 to_arrange=chain(
+                    [
+                        Button.inline('1min',
+                                      data=f'set_default=interval,1{tail}'
+                                      if is_user else
+                                      f'set={sub_or_user.id},interval,1|{page}{tail}')
+                    ],
                     (
                         Button.inline('1h' if interval == 60 else f'{interval}min',
                                       data=f'set_default=interval,{interval}{tail}'

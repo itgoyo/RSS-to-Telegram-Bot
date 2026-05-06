@@ -60,12 +60,13 @@ class User(Model, Base):
     send_mode = fields.SmallIntField(default=0)
     length_limit = fields.SmallIntField(default=0)
     link_preview = fields.SmallIntField(default=0)
-    display_author = fields.SmallIntField(default=0)
-    display_via = fields.SmallIntField(default=0)
+    display_author = fields.SmallIntField(default=-1)
+    display_via = fields.SmallIntField(default=-2)
     display_title = fields.SmallIntField(default=0)
     display_entry_tags = fields.SmallIntField(default=-1)
     style = fields.SmallIntField(default=0)
     display_media = fields.SmallIntField(default=0)
+    ai_tags = fields.SmallIntField(default=0)  # -1=disable, 0=follow global AI_TAGGING_ENABLED, 1=enable
 
     class Meta:
         table = 'user'
@@ -182,12 +183,12 @@ class Sub(Model, Base):
                     '0=auto, 1=force enable',
     )
     display_author = fields.SmallIntField(
-        default=0,
+        default=-1,
         description='Display author or not?'
                     '-1=disable, 0=auto, 1=force display',
     )
     display_via = fields.SmallIntField(
-        default=0,
+        default=-2,
         description='Display via or not?'
                     '-2=completely disable, -1=disable but display link, 0=auto, 1=force display',
     )
@@ -208,6 +209,7 @@ class Sub(Model, Base):
         description='Display media or not?'
                     '-1=disable, 0=enable',
     )
+    ai_tags = fields.SmallIntField(default=-100)  # -100=user default, -1=disable, 0=follow global, 1=enable
 
     class Meta:
         table = 'sub'

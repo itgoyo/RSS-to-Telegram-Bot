@@ -16,8 +16,10 @@
 
 from __future__ import annotations
 from typing import Optional
+import asyncio
+import re
 
-from .. import db
+from .. import db, env
 from ..errors_collection import MediaSendFailErrors
 from .utils import parse_entry, logger, Enclosure
 from .post_formatter import PostFormatter
@@ -77,10 +79,32 @@ class Post:
             enclosures=self.enclosures
         )
 
+        # AI tags cache: None=not fetched yet, []=fetched but empty, [tag, ...]=fetched with results
+        self._ai_tags: Optional[list[str]] = None
+        self._ai_tags_lock: asyncio.Lock = asyncio.Lock()
+
+    async def _get_ai_tags(self) -> list[str]:
+        """Fetch AI-generated tags, caching the result for this Post instance."""
+        if self._ai_tags is not None:
+            return self._ai_tags
+        async with self._ai_tags_lock:
+            if self._ai_tags is not None:
+                return self._ai_tags
+            from ..ai.tagger import generate_tags
+            plain = re.sub(r'<[^>]+>', ' ', self.html or '')
+            plain = re.sub(r'\s+', ' ', plain).strip()
+            self._ai_tags = await generate_tags(title=self.title or '', content=plain)
+        return self._ai_tags
+
     async def send_formatted_post_according_to_sub(self, sub: db.Sub):
         if not isinstance(sub.feed, db.User):
             await sub.fetch_related('user')
         user: db.User = sub.user
+        ai_tags_val = sub.ai_tags if sub.ai_tags != -100 else user.ai_tags
+        enable_ai_tags = bool(
+            env.OPENAI_API_KEY
+            and (ai_tags_val == 1 or (ai_tags_val == 0 and env.AI_TAGGING_ENABLED))
+        )
         await self.send_formatted_post(
             user_id=sub.user_id,
             sub_title=sub.title,
@@ -94,7 +118,8 @@ class Post:
             display_entry_tags=sub.display_entry_tags if sub.display_entry_tags != -100 else user.display_entry_tags,
             style=sub.style if sub.style != -100 else user.style,
             display_media=sub.display_media if sub.display_media != -100 else user.display_media,
-            silent=not (sub.notify if sub.notify != -100 else user.notify)
+            silent=not (sub.notify if sub.notify != -100 else user.notify),
+            enable_ai_tags=enable_ai_tags,
         )
 
     async def send_formatted_post(self,
@@ -110,7 +135,8 @@ class Post:
                                   display_entry_tags: int = -1,
                                   style: int = 0,
                                   display_media: int = 0,
-                                  silent: bool = False):
+                                  silent: bool = False,
+                                  enable_ai_tags: bool = False):
         """
         Send formatted post.
 
@@ -128,7 +154,14 @@ class Post:
         :param style: 0=RSStT, 1=flowerss
         :param display_media: -1=disable, 0=enable
         :param silent: whether to send with notification sound
+        :param enable_ai_tags: whether to append AI-generated hashtags to the post
         """
+        ai_tag_str = ''
+        if enable_ai_tags:
+            ai_tags = await self._get_ai_tags()
+            if ai_tags:
+                ai_tag_str = '\n' + ' '.join(f'#{t}' for t in ai_tags)
+
         for _ in range(3):
             try:
                 formatted_post_tuple = \
@@ -149,6 +182,9 @@ class Post:
                     return  # skip
 
                 formatted_post, need_media, need_link_preview = formatted_post_tuple
+
+                if ai_tag_str:
+                    formatted_post = formatted_post + ai_tag_str
 
                 message_dispatcher = MessageDispatcher(user_id=user_id,
                                                        html=formatted_post,

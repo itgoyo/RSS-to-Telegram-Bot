@@ -355,6 +355,12 @@ def __get_database_url() -> str:
 
 DATABASE_URL: Final = __get_database_url()
 
+# ----- AI config -----
+OPENAI_API_KEY: Final = os.environ.get('OPENAI_API_KEY') or ''
+OPENAI_API_BASE: Final = (os.environ.get('OPENAI_API_BASE') or 'https://api.openai.com/v1').rstrip('/')
+DEFAULT_AI_MODEL: Final = os.environ.get('DEFAULT_AI_MODEL') or 'gpt-4o-mini'
+AI_TAGGING_ENABLED: Final = __bool_parser(os.environ.get('AI_TAGGING_ENABLED'))
+
 # ----- misc config -----
 TABLE_TO_IMAGE: Final = __bool_parser(os.environ.get('TABLE_TO_IMAGE'))
 TRAFFIC_SAVING: Final = __bool_parser(os.environ.get('TRAFFIC_SAVING'))
